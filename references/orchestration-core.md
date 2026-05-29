@@ -17,7 +17,7 @@ Identity, status lifecycle, cancellation polling, round control, and done-signal
 - **Scratchpad gotcha**: `scratchpad_write` takes a `name` and **returns a `scratchpad_id`**. Every *other* op — `scratchpad_read`, `scratchpad_tail`, `scratchpad_archive` — is keyed by `scratchpad_id`, NOT by name. Enumerate a run's *visible* pads with `scratchpad_list(tags=["{run_id}"])` (returns ids + names; archived pads excluded). **Record the `scratchpad_id` of every pad you write** — you need ids to append, read back, and archive.
 - **Worker-pad naming**: `counselors.{run_id}.worker.{round_seg}{agent}-{index}`, where `round_seg` is `""` (run) or `r{N}.` (loop round N) — yielding `…worker.{agent}-{index}` or `…worker.r{N}.{agent}-{index}`. Tags: `["counselor","{run_id}","worker","{agent}"]`, plus `"round-{N}"` in loop.
 - **Fence extraction**: pull the text between `<<<COUNSELOR-OUTPUT-BEGIN>>>` and `<<<COUNSELOR-OUTPUT-END>>>`. If the markers are missing, take the last ~3000 chars and prefix `[no fence markers detected — raw tail]`.
-- **Read-only spawn**: under `read_only_policy == strict`, pass an agent-specific tool allowlist via `extra_args` at spawn (Claude Code: `["--allowedTools","Read,Glob,Grep,WebFetch,WebSearch"]`). Agents with no allowlist flag: refuse to spawn under `strict` and note it in progress.
+- **Read-only spawn**: under `read_only_policy == strict`, pass an agent-specific tool allowlist via `extra_args` at spawn (Claude Code: `["--allowedTools","Read,Glob,Grep,WebFetch,WebSearch"]`). For an agent with **no known allowlist flag** (currently anything other than the Claude family), do **not** refuse it and do **not** ask the user — automatically **downgrade just that agent to best-effort** (the worker preamble's in-prompt READ-ONLY block, which binds every backend) and note the per-agent downgrade in progress. Model diversity is the whole point of the panel, so keep every agent in the run: `strict` means "hard sandbox where supported, in-prompt enforcement everywhere else," never a silently shrunk panel.
 
 ## Routine: BUILD-EXECUTION-PROMPT
 
@@ -38,7 +38,7 @@ Turns the user's task into the (usually enriched) prompt that every worker recei
 
 For each entry (call `spawn_agent` per entry — each returns immediately, so workers run in parallel):
 
-1. `spawn_agent(agent_tool_id={entry.agent_tool_id}, name="counselor-{agent}-{index}{name_suffix}", include_agent_instructions=true)` → `worker_pid` **and the response's optional `agent_instructions`** (the agent's own bootstrap — keep it). Under `strict`, add the `extra_args` allowlist.
+1. `spawn_agent(agent_tool_id={entry.agent_tool_id}, name="counselor-{agent}-{index}{name_suffix}", include_agent_instructions=true)` → `worker_pid` **and the response's optional `agent_instructions`** (the agent's own bootstrap — keep it). Under `strict`, add the `extra_args` allowlist if this agent supports one; if it doesn't (non-Claude), spawn it anyway under best-effort enforcement (see *Read-only spawn*) — never skip an agent or pause to ask.
 2. Build the worker turn by substituting into `worker_preamble_text`:
    - `{{EXECUTION_PROMPT}}` ← `execution_prompt` — **the same text for every worker in the wave**.
    - `{{PRIOR_ROUND_CONTEXT}}` ← `prior_round_context` (empty string when there is none).
