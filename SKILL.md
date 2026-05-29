@@ -143,7 +143,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
    - User interrupts → `stop_process` any live workers, SYNTHESIZE what you have, `kv_set status "cancelled"`; **do not archive**.
 7. Present **inline** per Step 9 — you already hold the summary. **There is no poll loop; skip Step 8.**
 
-> Idle-wait here uses `timer_fire_when_idle_all` from this external session watching the workers it spawned. If that proves unreliable in practice, fall back to polling each worker's `get_process_status` until idle, then collect.
+> **Run-mode idle-wait.** `COLLECT-WAVE` schedules `timer_fire_when_idle_all` from this **external** session (your live Claude Code session, not a Solo-managed agent), so PTY delivery of the `wave-complete` body is less guaranteed here than for loop's detached coordinator. The `already_satisfied` branch in `COLLECT-WAVE` already covers the common fast-worker case — when the workers finish before the timer is even scheduled, you collect immediately and no body is needed. If a timer *is* pending but no `wave-complete` arrives within a short grace (~10s), don't keep waiting: poll each worker's `get_process_status` every few seconds until all are idle, then collect. Loop mode keeps the pure idle-timer (delivery to the detached coordinator is reliable).
 
 ### Step 7b — Loop mode: spawn a detached coordinator
 

@@ -52,7 +52,9 @@ For each entry (call `spawn_agent` per entry — each returns immediately, so wo
 
 **Inputs**: `workers` (from DISPATCH-WAVE), `round_seg` (`""` or `r{N}.`), `extra_tags` (`[]` for run, `["round-{N}"]` for loop), `progress_id`, `deadline_ts_ms`.
 
-1. `max_wait_ms = deadline_ts_ms - now`. `timer_fire_when_idle_all(processes=[all worker_pids], max_wait_ms=max_wait_ms, body="wave-complete")`. Wait for the body.
+1. `max_wait_ms = max(0, deadline_ts_ms - now)`. Schedule `timer_fire_when_idle_all(processes=[all worker_pids], max_wait_ms=max_wait_ms, body="wave-complete")` and **inspect the response — do not blindly wait for the body**:
+   - `status == "already_satisfied"` → every worker was *already* idle when you scheduled, so Solo created **no** timer and will fire **no** body. Go straight to step 2 now. This is the fast-worker race ("the agent finished before the timer"): if you wait for a `wave-complete` that will never arrive, you hang.
+   - otherwise a timer is pending → end your turn and resume when the `wave-complete` body wakes you (or the `max_wait_ms` guard fires). The response's `already_idle` workers are already counted toward the all-idle condition; `waiting_on` is who you're still blocked on. An idle worker = its turn ended, whether it *finished* or *asked a question* — step 2 reads each output and tells them apart, so you never block on a worker that paused to ask.
 2. For each worker:
    - `get_process_status(worker_pid)` — distinguish clean idle from crash/timeout.
    - `get_process_output(worker_pid, lines=4000)`.
