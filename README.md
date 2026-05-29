@@ -112,18 +112,18 @@ These flags are also available in `loop` mode.
 
 | Flag | Meaning | Default |
 |---|---|---|
-| `<prompt>` / `-f <path>` | The task to review | required |
+| `<prompt>` or `-f/--file <path>` | The task to review. Either positional text (enriched by default — discovery + prompt-writing runs) or read from a file via `-f`/`--file`. A **file** prompt is sent **as-is**; enrichment is skipped unless you also pass `--preset`. | required |
 | `--mode <run\|loop>` | One-shot or iterative | `run` |
 | `--agents <a,b,c>` (`-a`) | Agent panel — one worker each, dups allowed | first available |
 | `--group <name>` | Use a saved agent group | last-used |
-| `--read-only <strict\|best-effort\|off>` | Worker mutation policy | `best-effort` |
+| `--read-only <strict\|best-effort\|off>` | Worker mutation policy | preset default or `best-effort` |
 | `--context <paths>` | Files to attach to the prompt | — |
 | `--preset <name>` | Shape discovery + prompt-writing (one preset) | none |
 | `--no-inline-enhancement` | Skip enrichment for an inline prompt (send it raw) | off |
 | `--duration <e.g. 30m>` | Total deadline | `15m` |
 | `--dry-run` | Print plan, don't spawn | off |
 | `--status <run_id>` / `--cancel <run_id>` | Reconnect / cancel a run | — |
-| `--list-groups` / `--save-group` / `--delete-group` | Manage agent groups | — |
+| `--list-groups` / `--save-group <name>=<a,b,c>` / `--delete-group <name>` | Manage agent groups (list / save / delete) | — |
 | `--list-presets` | List available presets, then exit | — |
 
 ### Loop-only flags
