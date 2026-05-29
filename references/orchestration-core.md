@@ -23,7 +23,7 @@ Identity, status lifecycle, cancellation polling, round control, and done-signal
 
 Turns the user's task into the (usually enriched) prompt that every worker receives. Both modes call this once before dispatching — run inline, loop in the coordinator.
 
-**Inputs**: `user_prompt` (text or path), `prompt_source` (`inline`|`file`), `enhance` (`on`|`off`), `preset_path` (or empty), `prompt_writing_text`, `execution_boilerplate_text`, `progress_id`, `deadline_ts_ms`.
+**Inputs**: `user_prompt` (text or path — the caller has **already folded in any `--context` file contents**, so treat it as the complete task input; context handling is the caller's job, not this routine's), `prompt_source` (`inline`|`file`), `enhance` (`on`|`off`), `preset_path` (or empty), `prompt_writing_text`, `execution_boilerplate_text`, `progress_id`, `deadline_ts_ms`.
 
 1. If `enhance == on`: follow `prompt_writing_text`. Run the **discovery** phase — explore the scoped repo with Read/Grep/Glob, guided by the preset's *Discovery focus* when `preset_path` is set; budget discovery tightly against the deadline. Then the **prompt-writing** phase to produce a sharp, self-contained `base_prompt` (a longer, repo-grounded prompt — not the raw one-liner). If you cannot read the repo, fall back to `base_prompt = user_prompt` and note it in progress.
 2. Else (`enhance == off`): `base_prompt = user_prompt` (resolve from file if it is a path), verbatim.

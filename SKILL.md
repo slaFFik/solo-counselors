@@ -75,7 +75,11 @@ Call these in sequence; abort with a clear error on any failure. Cache the resul
 - `--status <run_id>`: `mcp__solo__kv_get("counselors." + run_id + ".status")`. To read any pad you need its id — `scratchpad_list(tags=[run_id])` returns this run's *visible* pads (names + ids). Then branch on status:
   - **`done`** (a finished — possibly detached — run that wasn't cleaned up yet): `scratchpad_read` the `counselors.{run_id}.summary` pad and present it; then reap the coordinator (`kv_get coordinator_pid` → `close_process`, ignore "not found") **and** run the clean-up from Step 9 (delete the per-run KV keys).
   - **absent / null** (a clean `done` whose KV was already deleted, or an unknown id): `scratchpad_list(tags=[run_id])` — a visible `counselors.{run_id}.summary` ⇒ the run completed and was already cleaned up, so read + present it; nothing visible ⇒ tell the user there's no live or recorded run by that id.
-  - **`running` / `spawning`**: find `counselors.{run_id}.progress`, `scratchpad_tail(scratchpad_id, lines=20)`, show the last lines plus the coordinator's `get_process_status`, and offer to enter the poll loop. Don't reap or clean — it's live.
+  - **`running` / `spawning`**: find `counselors.{run_id}.progress` and `scratchpad_tail(scratchpad_id, lines=20)` to show the last lines. Then branch on the coordinator via `kv_get("counselors." + run_id + ".coordinator_pid")`:
+    - **pid present** (a **loop** run): show its `get_process_status` and offer to enter the poll loop — it's live.
+    - **no pid** (an inline **run** whose session ended): run mode never spawns a separate coordinator and coordinates inline, so a stuck `running` means the originating session died mid-run. There is **no live process to poll** and nothing will ever flip the status — tell the user it can't be resumed and they should re-run it. Don't offer the poll loop.
+
+    Either way, don't reap or clean — the state is left as-is for inspection.
   - **`partial` / `timeout` / `error` / `cancelled`**: present the summary + tail progress, reap the coordinator, but **do not** delete the KV keys — keep them (and the visible pads) for inspection.
 - `--cancel <run_id>`: `kv_set("counselors." + run_id + ".cancel", "1")`; look up coordinator pid via `kv_get("counselors." + run_id + ".coordinator_pid")` and `mcp__solo__stop_process(pid)`. Confirm to the user.
 
