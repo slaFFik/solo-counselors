@@ -94,7 +94,7 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Durable & resumable (loop)** — loop state lives in `counselors.<run_id>.*` KV keys and scratchpads, driven by a detached coordinator; reconnect with `--status <run_id>`, stop with `--cancel <run_id>`. A `run` coordinates inline, so it lives and dies with your session — short by design.
 
-- **Read-only enforcement** — `strict` / `best-effort` / `off`. Workers are sandboxed; under `strict` they're spawned with a tool allowlist. The coordinator stays writable so it can orchestrate (and read the repo during loop discovery).
+- **Read-only enforcement** — `strict` / `best-effort` / `off`. Workers are sandboxed; under `strict` they're spawned with a tool allowlist (currently the Claude-family `--allowedTools` only, so a mixed panel under `strict` drops its non-Claude members — use `best-effort` for mixed panels, where the in-prompt read-only rules apply to every backend). The coordinator stays writable so it can orchestrate (and read the repo during loop discovery).
 
 - **One master report** — beyond the original, the coordinator writes a deduped combined summary (with per-model attribution) to `counselors.<run_id>.summary`. On a clean run the per-agent scratchpads are then **archived** (and the run's transient KV state is **deleted**), so a finished run leaves a single visible pad as its only artifact — but archived ≠ deleted, so you can still browse an individual agent's review in Solo if you want to drill in.
 

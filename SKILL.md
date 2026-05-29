@@ -153,7 +153,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
 
 1. `kv_set("counselors." + run_id + ".status", "spawning")`.
 2. Pick the coordinator agent: prefer `claude-code` from the agent-tools list (it needs Read/Grep/Glob for discovery); fall back to the first available with a warning to the user.
-3. `mcp__solo__spawn_agent(agent_tool_id=<coordinator_tool_id>, name="counselor-coord-" + run_id, include_agent_instructions=true)` → `coord_pid`.
+3. `mcp__solo__spawn_agent(agent_tool_id=<coordinator_tool_id>, name="counselor-coord-" + run_id, include_agent_instructions=true)` → `coord_pid` (keep the response's optional `agent_instructions` — the coordinator's own bootstrap).
 4. `kv_set("counselors." + run_id + ".coordinator_pid", coord_pid)`.
 5. `Read(references/coordinator-loop-prompt.md)`; substitute all `{{...}}` placeholders with concrete values from this invocation:
    - `{{RUN_ID}}` ← run_id
@@ -172,7 +172,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
    - `{{ROUND_CONTEXT_TEMPLATE_PATH}}` ← absolute path to references/round-context-template.md
    - `{{PROMPT_WRITING_PATH}}` ← absolute path to references/prompt-writing.md
    - `{{EXECUTION_BOILERPLATE_PATH}}` ← absolute path to references/execution-boilerplate.md
-6. `mcp__solo__send_input(process_id=coord_pid, input=<substituted text>, submit=true, wait_ms=2000)`.
+6. `mcp__solo__send_input(process_id=coord_pid, input=<the `agent_instructions` (if any) then a blank line, followed by the substituted coordinator text>, submit=true, wait_ms=2000)`.
 7. Verify via `mcp__solo__get_process_status(coord_pid)` that the coordinator is alive and accepted input. If not, error and surface what went wrong.
 8. Tell the user: `Coordinator spawned (pid={coord_pid}, run_id={run_id}). Polling…` Then proceed to Step 8.
 
@@ -215,7 +215,7 @@ On a clean `done` the coordinator archives everything except the summary, so a f
 
 ## Read-only enforcement
 
-The worker preamble enforces this in prompt; under `--read-only strict` additionally pass an agent-specific allowlist via `extra_args` when calling `spawn_agent` for workers (Claude Code: `["--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch"]`). Agents without support for an allowlist flag: refuse to spawn under `strict` and tell the user.
+The worker preamble enforces this in prompt; under `--read-only strict` additionally pass an agent-specific allowlist via `extra_args` when calling `spawn_agent` for workers (Claude Code: `["--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch"]`). Agents without support for an allowlist flag: refuse to spawn under `strict` and tell the user. **Only the Claude-family allowlist flag (`--allowedTools`) is wired in**, so under `strict` non-Claude agents are refused and a mixed panel **silently shrinks to its Claude members**. For a mixed-model panel prefer `best-effort`, where the in-prompt READ-ONLY block enforces the policy identically across every backend.
 
 Note: the **coordinator** is NOT read-only — it needs to call MCP tools to orchestrate, and it uses Read/Grep/Glob for the discovery phase (both modes). Only workers are restricted. (In run mode the coordinator is *this skill session*, which already has full access; in loop mode it's the spawned coordinator agent.)
 

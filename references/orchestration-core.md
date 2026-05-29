@@ -25,7 +25,7 @@ Turns the user's task into the (usually enriched) prompt that every worker recei
 
 **Inputs**: `user_prompt` (text or path — the caller has **already folded in any `--context` file contents**, so treat it as the complete task input; context handling is the caller's job, not this routine's), `prompt_source` (`inline`|`file`), `enhance` (`on`|`off`), `preset_path` (or empty), `prompt_writing_text`, `execution_boilerplate_text`, `progress_id`, `deadline_ts_ms`.
 
-1. If `enhance == on`: follow `prompt_writing_text`. Run the **discovery** phase — explore the scoped repo with Read/Grep/Glob, guided by the preset's *Discovery focus* when `preset_path` is set; budget discovery tightly against the deadline. Then the **prompt-writing** phase to produce a sharp, self-contained `base_prompt` (a longer, repo-grounded prompt — not the raw one-liner). If you cannot read the repo, fall back to `base_prompt = user_prompt` and note it in progress.
+1. If `enhance == on`: follow `prompt_writing_text`. Run the **discovery** phase — explore the scoped repo with Read/Grep/Glob, guided by the preset's *Discovery focus* when `preset_path` is set; **cap discovery at roughly a third of the time remaining to `deadline_ts_ms` (half at the very most)** — `COLLECT-WAVE` only waits until that same deadline, so an over-long discovery starves the worker wave. Then the **prompt-writing** phase to produce a sharp, self-contained `base_prompt` (a longer, repo-grounded prompt — not the raw one-liner). If you cannot read the repo, fall back to `base_prompt = user_prompt` and note it in progress.
 2. Else (`enhance == off`): `base_prompt = user_prompt` (resolve from file if it is a path), verbatim.
 3. `execution_prompt = base_prompt + "\n\n" + execution_boilerplate_text`.
 4. `scratchpad_write(name="counselors.{run_id}.prompt", content=execution_prompt, tags=["counselor","{run_id}","prompt"])` → **record `prompt_id`**. Append `[execution-prompt-built enhance={enhance} preset={name|none} words={wc}]` to progress.
@@ -38,10 +38,11 @@ Turns the user's task into the (usually enriched) prompt that every worker recei
 
 For each entry (call `spawn_agent` per entry — each returns immediately, so workers run in parallel):
 
-1. `spawn_agent(agent_tool_id={entry.agent_tool_id}, name="counselor-{agent}-{index}{name_suffix}", include_agent_instructions=true)` → `worker_pid`. Under `strict`, add the `extra_args` allowlist.
-2. Build the composite first turn by substituting into `worker_preamble_text`:
+1. `spawn_agent(agent_tool_id={entry.agent_tool_id}, name="counselor-{agent}-{index}{name_suffix}", include_agent_instructions=true)` → `worker_pid` **and the response's optional `agent_instructions`** (the agent's own bootstrap — keep it). Under `strict`, add the `extra_args` allowlist.
+2. Build the worker turn by substituting into `worker_preamble_text`:
    - `{{EXECUTION_PROMPT}}` ← `execution_prompt` — **the same text for every worker in the wave**.
    - `{{PRIOR_ROUND_CONTEXT}}` ← `prior_round_context` (empty string when there is none).
+   Then form the **composite first turn**: if `agent_instructions` is non-empty, prepend it (then a blank line) so the agent gets its own bootstrap before our preamble; otherwise the composite is just the substituted preamble.
 3. `send_input(process_id=worker_pid, input=composite, submit=true, wait_ms=2000)`.
 4. `get_process_status(worker_pid)` — verify alive + accepted input. On failure, append an error line to progress and **continue** (one failed spawn does not abort the wave).
 5. Track `{agent, index, worker_pid}`.
@@ -55,13 +56,9 @@ For each entry (call `spawn_agent` per entry — each returns immediately, so wo
 1. `max_wait_ms = max(0, deadline_ts_ms - now)`. Schedule `timer_fire_when_idle_all(processes=[all worker_pids], max_wait_ms=max_wait_ms, body="wave-complete")` and **inspect the response — do not blindly wait for the body**:
    - `status == "already_satisfied"` → every worker was *already* idle when you scheduled, so Solo created **no** timer and will fire **no** body. Go straight to step 2 now. This is the fast-worker race ("the agent finished before the timer"): if you wait for a `wave-complete` that will never arrive, you hang.
    - otherwise a timer is pending → end your turn and resume when the `wave-complete` body wakes you (or the `max_wait_ms` guard fires). The response's `already_idle` workers are already counted toward the all-idle condition; `waiting_on` is who you're still blocked on. An idle worker = its turn ended, whether it *finished* or *asked a question* — step 2 reads each output and tells them apart, so you never block on a worker that paused to ask.
-2. For each worker:
-   - `get_process_status(worker_pid)` — distinguish clean idle from crash/timeout.
-   - `get_process_output(worker_pid, lines=4000)`.
-   - **Fence-extract** (see conventions).
-   - `scratchpad_write(name="counselors.{run_id}.worker.{round_seg}{agent}-{index}", content=extracted, tags=["counselor","{run_id}","worker","{agent}", ...extra_tags])` → **record the returned `scratchpad_id`** in your working-pads list. Keep the extracted text **in memory** (needed for synthesis and, in loop, the next round's prior-context).
-   - Append to progress (you hold `progress_id`): `[{round_seg}{agent}-{index} done | status={status} | words={wc}]`.
-   - `close_process(worker_pid)`.
+2. **First pass** — for each worker: `get_process_status(worker_pid)` (distinguish clean idle from crash/timeout), `get_process_output(worker_pid, lines=4000)`, then **fence-extract** (see conventions). Mark a worker **needs-nudge** if it is idle but produced **no closing fence** (it stalled or asked a question instead of finishing). Don't close workers yet.
+3. **Nudge pass (at most once)** — if any worker needs-nudge and the deadline allows: `send_input(worker_pid, "You went idle without emitting your analysis. Proceed with your best read-only analysis now and wrap your final answer in <<<COUNSELOR-OUTPUT-BEGIN>>> / <<<COUNSELOR-OUTPUT-END>>>.", submit=true)` for each such worker, then `timer_fire_when_idle_all` on just those workers with a short cap (well under the remaining deadline; honor `already_satisfied` exactly as in step 1), re-read each, and re-extract. Nudge each worker **only once**.
+4. **Record & close** — for each worker: if the closing fence is still missing, fall back to the raw tail (prefixed `[no fence markers detected — raw tail]`). `scratchpad_write(name="counselors.{run_id}.worker.{round_seg}{agent}-{index}", content=extracted, tags=["counselor","{run_id}","worker","{agent}", ...extra_tags])` → **record the returned `scratchpad_id`** in your working-pads list; keep the extracted text **in memory** (needed for synthesis and, in loop, the next round's prior-context); append to progress (you hold `progress_id`): `[{round_seg}{agent}-{index} done | status={status} | words={wc} | nudged={yes|no}]`; `close_process(worker_pid)`.
 
 **Returns**: collected outputs (in memory, per worker) + the recorded worker `scratchpad_id`s + per-worker final status.
 
