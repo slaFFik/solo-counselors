@@ -59,17 +59,20 @@ You have full access to Solo MCP tools (`mcp__solo__*`) and read-only file tools
 
    f. **Convergence check** (only for N >= 2): for each agent, `ratio = words(r{N}) / max(1, words(r{N-1}))`; `mean_ratio` across agents. If `mean_ratio < convergence_threshold` → `kv_set("counselors.{run_id}.convergence", "reached")`, append `[converged mean_ratio={...}]` to progress, break the loop.
 
-   g. **Timeout policy**: if any worker timed out and `on_timeout == "abort"` → break the loop after recording partial.
+   g. **Timeout policy**: if any worker timed out and `on_timeout == "abort"` → set the run's terminal status to `partial` (you'll still SYNTHESIZE below, but won't archive), then break the loop.
 
-6. **SYNTHESIZE** (core): across all rounds and agents, with `agents_csv`, `rounds = N_completed`, and a `preset_note` (` · preset {name}` or empty). The synthesis should also note how findings evolved across rounds and any convergence/timeout/cancel state. Records `summary_id`.
+6. **SYNTHESIZE** (core): across all rounds and agents, with `agents_csv`, `rounds = N_completed`, and a `preset_note` (` · preset {name}` or empty). The synthesis should also note how findings evolved across rounds and any convergence/timeout/cancel state. Records `summary_id`. (Always runs, whatever the terminal status.)
 
-7. **ARCHIVE-WORKING-PADS** (core): pass every worker `scratchpad_id` (all rounds), the `prompt_id`, and the `progress_id`. Leaves `counselors.{run_id}.summary` as the **only visible** pad.
+7. **Finalize** — settle the terminal status, then archive only on a clean `done`:
+   - The run is **`done`** when the round loop ended normally (all rounds completed, or convergence reached at `5f`) **and at least one worker produced usable output** across the rounds. A worker that crashed or timed out within a round is tolerated (reported in Panel health) and does not by itself change this.
+   - The run is **`partial`** if `5g` set it (an `on_timeout == "abort"` after a round timed out), **or** if no worker produced any usable output at all.
+   - On **`done`** only: **ARCHIVE-WORKING-PADS** (core) — pass every worker `scratchpad_id` (all rounds), the `prompt_id`, and the `progress_id`; this leaves `counselors.{run_id}.summary` as the **only visible** pad. On **`partial`**: archive nothing — leave the per-agent pads visible.
 
-8. **Mark done & despawn**: `kv_set("counselors.{run_id}.status", "done")`; emit `__COUNSELOR_DONE__:{run_id}`. You now have **no further purpose** — the summary, status, and pads are all persisted independently of you. As your **final action**, despawn yourself: `mcp__solo__close_process(process_id=<your process_id from step 1>)` (best-effort — if self-close isn't permitted, just stop; the skill reaps you as a backstop).
+8. **Mark status & despawn**: `kv_set("counselors.{run_id}.status", <the status settled in step 7 — `done` or `partial`>)` — do **not** hardcode `done`, or you'd clobber a `partial` from `5g`. Emit `__COUNSELOR_DONE__:{run_id}`. You now have **no further purpose** — the summary, status, and pads are all persisted independently of you. As your **final action**, despawn yourself: `mcp__solo__close_process(process_id=<your process_id from step 1>)` (best-effort — if self-close isn't permitted, just stop; the skill reaps you as a backstop).
 
 ## Cancellation & failures
 
-Cancel checks at every round boundary AND between steps inside a round. Stop hung workers with `stop_process`. A single failed spawn is skipped (noted in progress), not fatal. **Only archive on the clean `done` path** (step 7) — for `partial` / `timeout` / `cancelled`, SYNTHESIZE what you can and leave all scratchpads visible.
+Cancel checks at every round boundary AND between steps inside a round. Stop hung workers with `stop_process`. A single failed spawn is skipped (noted in progress), not fatal. Likewise an individual worker that crashes or times out mid-round is **tolerated** and reported in Panel health — it does **not** by itself make the run `partial`. Reserve `partial` / `timeout` for a run cut short *as a whole* (budget exhausted, or `on_timeout == abort`), or one where no worker produced any usable output; a normal finish with at least one usable output is `done`. **Only archive on the clean `done` path** (step 7) — for `partial` / `timeout` / `cancelled`, SYNTHESIZE what you can and leave all scratchpads visible.
 
 **Despawn on every exit.** On *any* terminal path (done / partial / timeout / cancelled), after writing the final status and summary, `close_process` yourself as the last action, exactly as in step 8 — an idle coordinator has no value once the run is over. (If the skill already `stop_process`ed you via `--cancel`, you're gone already; that's fine.)
 

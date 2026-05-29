@@ -141,10 +141,10 @@ In run mode **you are the coordinator** — do the work in this session; do **no
 3. **DISPATCH-WAVE** (core): `dispatch`, `execution_prompt`, `prior_round_context = ""`, `name_suffix = ""`, `read_only_policy`, the worker-preamble text. → `workers`.
 4. **COLLECT-WAVE** (core): `workers`, `round_seg = ""`, `extra_tags = []`, `progress_id`, `deadline_ts_ms`. → outputs (in memory) + worker `scratchpad_id`s.
 5. **SYNTHESIZE** (core): outputs, `agents_csv`, `rounds = 1`, `preset_note` (` · preset {name}` or empty). → `summary_id`.
-6. **Finalize:**
-   - Clean completion → **ARCHIVE-WORKING-PADS** (core) with the worker ids + `progress_id` + `prompt_id`; `kv_set status "done"`.
-   - Deadline hit, or a worker crashed and you only have partial output → `kv_set status "partial"`; **do not archive**.
-   - User interrupts → `stop_process` any live workers, SYNTHESIZE what you have, `kv_set status "cancelled"`; **do not archive**.
+6. **Finalize** — classify the run, then archive only on a clean `done`:
+   - **`done`** (the normal terminal state, *even if some agents failed*): you finished collecting the wave — every worker reached a terminal state, whether it produced output or crashed/timed out — **and at least one worker produced usable output**. A failed agent among others that succeeded does **not** downgrade the run; it's already reported in the synthesis Panel-health section. → **ARCHIVE-WORKING-PADS** (core) with the worker ids (including any failed worker's pad) + `progress_id` + `prompt_id`; `kv_set status "done"`. (So 1 of 3 agents failing while the other 2 succeed is still `done` — archive and clean up.)
+   - **`partial`** (the run was cut short *as a whole*): the deadline hit before you finished collecting the wave, **or** no worker produced any usable output at all. → `kv_set status "partial"`; **do not archive** — keep the per-agent pads for inspection.
+   - **`cancelled`**: user interrupts → `stop_process` any live workers, SYNTHESIZE what you have, `kv_set status "cancelled"`; **do not archive**.
 7. Present **inline** per Step 9 — you already hold the summary. **There is no poll loop; skip Step 8.**
 
 > **Run-mode idle-wait.** `COLLECT-WAVE` schedules `timer_fire_when_idle_all` from this **external** session (your live Claude Code session, not a Solo-managed agent), so PTY delivery of the `wave-complete` body is less guaranteed here than for loop's detached coordinator. The `already_satisfied` branch in `COLLECT-WAVE` already covers the common fast-worker case — when the workers finish before the timer is even scheduled, you collect immediately and no body is needed. If a timer *is* pending but no `wave-complete` arrives within a short grace (~10s), don't keep waiting: poll each worker's `get_process_status` every few seconds until all are idle, then collect. Loop mode keeps the pure idle-timer (delivery to the detached coordinator is reliable).
