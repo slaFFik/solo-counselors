@@ -96,7 +96,7 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Read-only enforcement** — `strict` / `best-effort` / `off`. Workers are sandboxed; under `strict` they're spawned with a tool allowlist. The coordinator stays writable so it can orchestrate (and read the repo during loop discovery).
 
-- **One master report** — beyond the original, the coordinator writes a deduped combined summary (with per-model attribution) to `counselors.<run_id>.summary`. On a clean run the per-agent scratchpads are then **archived**, so a finished run leaves a single visible pad — but archived ≠ deleted, so you can still browse an individual agent's review in Solo if you want to drill in.
+- **One master report** — beyond the original, the coordinator writes a deduped combined summary (with per-model attribution) to `counselors.<run_id>.summary`. On a clean run the per-agent scratchpads are then **archived** (and the run's transient KV state is **deleted**), so a finished run leaves a single visible pad as its only artifact — but archived ≠ deleted, so you can still browse an individual agent's review in Solo if you want to drill in.
 
 - **Guardrails** — preflight verifies Solo is reachable, a project is scoped, KV is enabled, and an agent exists. `--dry-run` prints the dispatch plan without spawning; `--duration` bounds total runtime. The whole panel spawns at once.
 
