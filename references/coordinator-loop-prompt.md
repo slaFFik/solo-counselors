@@ -65,10 +65,12 @@ You have full access to Solo MCP tools (`mcp__solo__*`) and read-only file tools
 
 7. **ARCHIVE-WORKING-PADS** (core): pass every worker `scratchpad_id` (all rounds), the `prompt_id`, and the `progress_id`. Leaves `counselors.{run_id}.summary` as the **only visible** pad.
 
-8. **Mark done**: `kv_set("counselors.{run_id}.status", "done")`. Emit `__COUNSELOR_DONE__:{run_id}` and stop.
+8. **Mark done & despawn**: `kv_set("counselors.{run_id}.status", "done")`; emit `__COUNSELOR_DONE__:{run_id}`. You now have **no further purpose** — the summary, status, and pads are all persisted independently of you. As your **final action**, despawn yourself: `mcp__solo__close_process(process_id=<your process_id from step 1>)` (best-effort — if self-close isn't permitted, just stop; the skill reaps you as a backstop).
 
 ## Cancellation & failures
 
 Cancel checks at every round boundary AND between steps inside a round. Stop hung workers with `stop_process`. A single failed spawn is skipped (noted in progress), not fatal. **Only archive on the clean `done` path** (step 7) — for `partial` / `timeout` / `cancelled`, SYNTHESIZE what you can and leave all scratchpads visible.
+
+**Despawn on every exit.** On *any* terminal path (done / partial / timeout / cancelled), after writing the final status and summary, `close_process` yourself as the last action, exactly as in step 8 — an idle coordinator has no value once the run is over. (If the skill already `stop_process`ed you via `--cancel`, you're gone already; that's fine.)
 
 Be terse in your own output. Workers do the reviewing; you build the prompt, orchestrate the rounds, summarize, and archive.
