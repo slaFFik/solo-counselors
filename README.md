@@ -1,4 +1,4 @@
-# solo-counselors
+# /solo-counselors
 
 A Claude Code skill that runs **parallel, multi-agent code review** by orchestrating other AI agents through the **Solo MCP** server.
 
@@ -120,7 +120,7 @@ These flags are also available in `loop` mode.
 | `--context <paths>` | Files to attach to the prompt | — |
 | `--preset <name>` | Shape discovery + prompt-writing (one preset) | none |
 | `--no-inline-enhancement` | Skip enrichment for an inline prompt (send it raw) | off |
-| `--duration <e.g. 30m>` | Total deadline | `15m` |
+| `--duration <e.g. 30m>` | Total deadline | `15m` run / `45m` loop |
 | `--dry-run` | Print plan, don't spawn | off |
 | `--status <run_id>` / `--cancel <run_id>` | Reconnect / cancel a run | — |
 | `--list-groups` / `--save-group <name>=<a,b,c>` / `--delete-group <name>` | Manage agent groups (list / save / delete) | — |
@@ -135,7 +135,6 @@ They are added on top of the `run` flags.
 | `--rounds <N>` | Max rounds before stopping | preset default or 3 |
 | `--convergence-threshold <ratio>` | Early-stop when output shrinks below this | 0.3 |
 | `--on-timeout <abort\|continue>` | What to do if a round times out | `continue` |
-| `--duration <e.g. 30m>` | Total deadline (overrides the run default) | `45m` |
 
 **Examples:**
 
