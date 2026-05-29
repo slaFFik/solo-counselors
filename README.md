@@ -150,8 +150,8 @@ They are added on top of the `run` flags.
 
 ## Requirements
 
-- Solo MCP configured in Claude Code, with the KV store enabled.
-- At least one Solo agent (`claude`, `gemini`, `codex`, `copilot`, `antigravity`) — two or more for a meaningful `run` panel.
+- [Solo MCP](https://soloterm.com/docs/integrations/mcp-server) configured in Claude Code, with the KV store enabled.
+- At least one [Solo agent](https://soloterm.com/docs/agents/what-are-agents) (`claude`, `gemini`, `codex`, `copilot`, `antigravity`) — two or more for a meaningful `run` or `loop` panel.
 
 ## Credits
 
