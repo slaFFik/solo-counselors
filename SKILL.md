@@ -18,7 +18,7 @@ The two paths share their dispatch/collect/synthesize/archive mechanics via `ref
 Two modes:
 
 - **`run`** — enriched single-shot fan-out. The skill builds an enriched execution prompt (repo-discovery → prompt-writing) and fans it **once** to one worker per agent. Single round, inline.
-- **`loop`** — enriched multi-round. A detached coordinator builds the same enriched prompt, then iterates: rounds 2+ feed prior outputs back so the panel refines. Convergence stops it early.
+- **`loop`** — enriched multi-round. A detached coordinator builds the same enriched prompt, then iterates: rounds 2+ feed each agent **its own** prior output back (never another agent's — no cross-model pollution) so each model refines its own analysis. Convergence stops it early.
 
 **Both** modes enrich by the same policy: a `--preset` (one per run) shapes the discovery + prompt-writing; enrichment runs by default for inline prompts (skip with `--no-inline-enhancement`) and is skipped for `-f` file prompts that have no preset. The run/loop difference is **iteration + durability**, not enrichment.
 
@@ -138,7 +138,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
 
 1. `kv_set("counselors." + run_id + ".status", "running")`. `scratchpad_write("counselors.{run_id}.progress", "[coordinator-start mode=run inline enhance={ENHANCE} ts={now}]", tags=["counselor","{run_id}","progress"])` — **record `progress_id`**.
 2. **BUILD-EXECUTION-PROMPT** (core): `user_prompt` (resolve `-f`; fold in `--context`), `prompt_source`, `ENHANCE`, `preset_path`, the prompt-writing text, the execution-boilerplate text, `progress_id`, `deadline_ts_ms`. → `execution_prompt` + **`prompt_id`**. When `ENHANCE == on` you run repo discovery here with **Read/Grep/Glob** (you have full file access) and write the enriched prompt; budget discovery against the deadline.
-3. **DISPATCH-WAVE** (core): `dispatch`, `execution_prompt`, `prior_round_context = ""`, `name_suffix = ""`, `read_only_policy`, the worker-preamble text. → `workers`.
+3. **DISPATCH-WAVE** (core): `dispatch`, `execution_prompt`, `prior_round_context_by_index = {}` (none — run is single-round), `name_suffix = ""`, `read_only_policy`, the worker-preamble text. → `workers`.
 4. **COLLECT-WAVE** (core): `workers`, `round_seg = ""`, `extra_tags = []`, `progress_id`, `deadline_ts_ms`. → outputs (in memory) + worker `scratchpad_id`s.
 5. **SYNTHESIZE** (core): outputs, `agents_csv`, `rounds = 1`, `preset_note` (` · preset {name}` or empty). → `summary_id`.
 6. **Finalize** — classify the run, then archive only on a clean `done`:

@@ -2,7 +2,7 @@
 
 You are the **detached coordinator** for a counselors loop, spawned as a Solo-managed agent so the run survives the user's Claude Code session closing. You first turn the user's task into one **execution prompt** (optionally via a repo-discovery + prompt-writing phase), then dispatch that **same** prompt to one worker **per agent**, iterate over multiple rounds, write a single **summary**, archive the working scratchpads, and exit. The panel's diversity comes from running **different models** on the identical prompt.
 
-After each round you condense prior findings and feed them into the next round so the panel builds on previous results instead of re-discovering the same issues.
+After each round you condense **each agent's own** findings and feed them back to **that same agent** in the next round, so every model builds on its own previous results instead of re-discovering the same issues. Agents never see one another's findings — there is **no cross-model pollution**; the coordinator does the cross-model merge only at synthesis.
 
 The mechanics of spawning workers, collecting their output, synthesizing, and archiving are **shared with run mode** and defined once in `references/orchestration-core.md` — read it and call its routines (DISPATCH-WAVE, COLLECT-WAVE, SYNTHESIZE, ARCHIVE-WORKING-PADS). This file owns only the **loop-specific wrapper**: discovery, prompt-writing, round iteration, convergence, and timeout policy.
 
@@ -51,9 +51,9 @@ You have full access to Solo MCP tools (`mcp__solo__*`) and read-only file tools
 
    b. **Check budget**: if `now > deadline_ts_ms` → SYNTHESIZE what you have, status `timeout`, exit (do **not** archive).
 
-   c. **Build prior-round context** (only for N >= 2): from the round N-1 outputs you still hold in memory, produce one condensed 1–3 sentence bullet per agent. Substitute into the round-context template (`{{PRIOR_ROUND_NUMBER}}`, `{{PRIOR_FINDINGS_BULLETS}}`). For N == 1 this block is the empty string.
+   c. **Build prior-round context, per worker** (only for N >= 2): for each worker, take **only its own** round N-1 output (you hold these in memory, keyed by `index`), condense it to 1–3 sentences, and substitute into the round-context template (`{{PRIOR_ROUND_NUMBER}}`, `{{YOUR_PRIOR_FINDINGS}}`) — producing one block **keyed by that worker's `index`**. A worker is **never** shown another agent's findings (no cross-model pollution): `claude-0`'s round-N prompt carries only `claude-0`'s round-(N-1) output. Collect these into `prior_round_context_by_index`. For N == 1 there is no prior context (empty map).
 
-   d. **DISPATCH-WAVE** (core) with: `execution_prompt` (constant across rounds), `prior_round_context` (empty for N == 1), `name_suffix = "-r{N}"`, the round's `read_only_policy`, and the worker-preamble text. Record the returned workers.
+   d. **DISPATCH-WAVE** (core) with: `execution_prompt` (constant across rounds), `prior_round_context_by_index` (the per-worker map from step c; empty for N == 1), `name_suffix = "-r{N}"`, the round's `read_only_policy`, and the worker-preamble text. Record the returned workers.
 
    e. **COLLECT-WAVE** (core) with: the round's workers, `round_seg = "r{N}."`, `extra_tags = ["round-{N}"]`, your `progress_id`, `deadline_ts_ms`. Accumulate the returned worker `scratchpad_id`s into a run-wide list and keep the per-agent text for prior-context + synthesis.
 

@@ -1,16 +1,15 @@
-# Round context template (loop mode, round 2+)
+# Round context template (loop mode, round 2+) — your own prior round only
 
-## Prior round findings (round {{PRIOR_ROUND_NUMBER}})
+## Your prior round (round {{PRIOR_ROUND_NUMBER}})
 
-The following are condensed summaries of what each agent in the panel reported in the previous round (one bullet per agent/model). Use this to:
-- Avoid repeating findings already covered — unless you have new evidence, sharper impact, or a better fix
-- **Challenge or refine** prior claims you think are wrong, overstated, or incomplete
-- Build on partial findings with additional depth
-- Identify gaps no agent has addressed yet
+Below is a condensed summary of what **you** reported last round. You are deliberately **not** shown the other agents' findings — your independent perspective is the whole point, and the coordinator merges across models later. Use this only to build on your own work:
+- Don't just repeat your earlier findings — restate one only if you now have new evidence, sharper impact, or a better fix
+- Go deeper: refine, strengthen, or correct your own prior claims
+- Cover what you missed last round — new areas, edge cases, or angles you didn't reach
 
-Prior findings (one per agent):
+Your prior findings:
 
-{{PRIOR_FINDINGS_BULLETS}}
+{{YOUR_PRIOR_FINDINGS}}
 
 ---
 

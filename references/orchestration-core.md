@@ -34,14 +34,14 @@ Turns the user's task into the (usually enriched) prompt that every worker recei
 
 ## Routine: DISPATCH-WAVE
 
-**Inputs**: `dispatch` (list of `{agent, agent_tool_id, index}`), `execution_prompt`, `prior_round_context` (empty string when none), `name_suffix` (`""` for run, `-r{N}` for loop), `read_only_policy`, `worker_preamble_text`.
+**Inputs**: `dispatch` (list of `{agent, agent_tool_id, index}`), `execution_prompt`, `prior_round_context_by_index` (map from a worker's `index` to **that worker's own** prior-round block; empty/absent ⇒ no prior context — run mode, or loop round 1), `name_suffix` (`""` for run, `-r{N}` for loop), `read_only_policy`, `worker_preamble_text`.
 
 For each entry (call `spawn_agent` per entry — each returns immediately, so workers run in parallel):
 
 1. `spawn_agent(agent_tool_id={entry.agent_tool_id}, name="counselor-{agent}-{index}{name_suffix}", include_agent_instructions=true)` → `worker_pid` **and the response's optional `agent_instructions`** (the agent's own bootstrap — keep it). Under `strict`, add the `extra_args` allowlist if this agent supports one; if it doesn't (non-Claude), spawn it anyway under best-effort enforcement (see *Read-only spawn*) — never skip an agent or pause to ask.
 2. Build the worker turn by substituting into `worker_preamble_text`:
    - `{{EXECUTION_PROMPT}}` ← `execution_prompt` — **the same text for every worker in the wave**.
-   - `{{PRIOR_ROUND_CONTEXT}}` ← `prior_round_context` (empty string when there is none).
+   - `{{PRIOR_ROUND_CONTEXT}}` ← `prior_round_context_by_index[entry.index]` (empty string if absent). **Each worker gets only its OWN prior-round findings — never another agent's. No cross-model pollution: round N of `claude-0` carries only round N-1 of `claude-0`.**
    Then form the **composite first turn**: if `agent_instructions` is non-empty, prepend it (then a blank line) so the agent gets its own bootstrap before our preamble; otherwise the composite is just the substituted preamble.
 3. `send_input(process_id=worker_pid, input=composite, submit=true, wait_ms=2000)`.
 4. `get_process_status(worker_pid)` — verify alive + accepted input. On failure, append an error line to progress and **continue** (one failed spawn does not abort the wave).

@@ -66,8 +66,10 @@ Neither mode fans out your raw one-liner. Both first build an **enriched executi
 both modes:   your task ──► [ repo discovery ] ──► [ prompt-writing ] ──► enriched prompt
                             (guided by --preset, if one is set)
 
-loop only:    rounds 2..N re-run the panel with each agent also seeing the previous
-              round's findings — to refine, challenge, and avoid repeating itself
+loop only:    rounds 2..N re-run the panel; each agent sees only ITS OWN previous-round
+              findings (never its peers') — to refine and go deeper without repeating
+              itself. Independence is preserved; the coordinator merges across models
+              only at synthesis.
 ```
 
 So the modes differ only after the prompt exists: **`run`** fans it out once; **`loop`** iterates rounds 2..N (and runs durably via the coordinator).
@@ -84,7 +86,7 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Two execution modes** (both enrich the prompt first):
   - `run` (default) — single-shot. Enriches the prompt, then fans it out once, inline. A fast second opinion.
-  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed prior findings back so the panel refines instead of repeating. Runs durably via a detached coordinator; stops early on **convergence** (output shrinks below a threshold).
+  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed each agent **its own** prior findings back (never its peers' — no cross-model pollution) so each model refines instead of repeating. Runs durably via a detached coordinator; stops early on **convergence** (output shrinks below a threshold).
 
 - **Presets (both modes)** — `bughunt`, `security`, `regression`, `contracts`, `invariants`, `hotspots`. A preset (one per run, via `--preset`) shapes *what the discovery phase looks for* and *what the written prompt emphasizes* — it is a workflow, not a per-agent persona. Add your own by dropping a markdown file in `presets/` with the same front-matter shape.
 
