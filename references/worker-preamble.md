@@ -23,9 +23,9 @@ Any attempt to mutate state is a protocol violation. Refuse the urge, note the i
 When you have completed your analysis, emit your final answer wrapped in fence markers exactly as shown — these are how the coordinator extracts your output from the terminal buffer:
 
 ```
-<<<COUNSELOR-OUTPUT-BEGIN>>>
+===COUNSELOR-OUTPUT-BEGIN===
 (your full analysis here — markdown ok)
-<<<COUNSELOR-OUTPUT-END>>>
+===COUNSELOR-OUTPUT-END===
 ```
 
 Do not emit the fence markers anywhere else in your output (no rehearsal, no examples). Emit them exactly once, surrounding your final analysis.
