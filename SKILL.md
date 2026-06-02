@@ -88,13 +88,13 @@ After handling any of these, stop. Do not proceed to the run.
 ## Step 3: Resolve agents (the panel)
 
 Precedence (highest first):
-1. `--agents <a,b,c>` (or `-a`) — split CSV, validate each against the agent-tools list (use the tool's `name` field). Duplicates are allowed and meaningful (e.g. `claude,claude` runs two independent claude instances).
+1. `--agents <a,b,c>` (or `-a`) — split CSV, validate each against the agent-tools list (case-insensitive match on the tool's `name` field). Duplicates are allowed and meaningful (e.g. `claude,claude` runs two independent claude instances).
 2. `--group <name>` — `kv_get("counselors.group." + name)`. If missing, error: "Group '{name}' not found. Run `/solo-counselors --list-groups` to see what's saved."
 3. `kv_get("counselors.group.last")` → fall back to that group's agents if it exists.
 4. **First-run UX**: if no group exists at all (kv_list shows no `counselors.group.*` keys): use AskUserQuestion to ask the user to pick agents from the `list_agent_tools` results (multi-select — encourage 2+ for a real panel), then ask for a name to save as. Allow "skip" to use only the first available agent without persisting. If they save, `kv_set("counselors.group." + name, csv)` and `kv_set("counselors.group.last", name)`.
 5. Final fallback: first agent from `list_agent_tools`.
 
-For each agent, resolve its `agent_tool_id` from the agent-tools listing (needed for `spawn_agent`).
+For each agent, resolve its `agent_tool_id` (the `id` field) from the agent-tools listing (needed for `spawn_agent`), and its `tool_type` (used by the strict read-only gate — see *Read-only enforcement*). **Validate against `enabled == true` entries only**, on every resolution path (explicit `--agents`, a `--group`, or `last`): a name that exists in the listing but is `enabled: false` is not spawnable, so reject it with a clear message — "Agent '{name}' exists in Solo but is disabled; enable it in Solo or drop it from the panel." — rather than letting it fail at spawn. (Preflight already guarantees ≥1 enabled agent exists overall; this guards the specific panel the user asked for.)
 
 **Single-agent warning (run mode)**: if the resolved panel has only one distinct agent and the user is in `run` mode, warn: "Run mode's diversity comes from different models — a one-agent panel is just a single opinion. Add another agent, or repeat one (e.g. `--agents {b},{b}`), for a real panel." Then proceed anyway.
 
@@ -213,7 +213,7 @@ On a clean `done` the coordinator archives everything except the summary, so a f
 
 ## Read-only enforcement
 
-The worker preamble enforces this in prompt; under `--read-only strict` additionally pass an agent-specific allowlist via `extra_args` when calling `spawn_agent` for workers (Claude Code: `["--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch"]`). Only the Claude-family allowlist flag (`--allowedTools`) is wired in, so for any **non-Claude** agent under `strict`, **don't refuse it and don't ask the user** — automatically **downgrade that one agent to best-effort** (the in-prompt READ-ONLY block, which binds every backend), note the per-agent downgrade, and keep going. This preserves the full multi-model panel — the whole point of counselors — while Claude-family agents still get the hard allowlist. So `strict` means "hard sandbox where supported, in-prompt enforcement everywhere else," and a preset defaulting to `strict` (e.g. `bughunt`, `security`) never collapses a mixed panel to Claude-only.
+The worker preamble enforces this in prompt; under `--read-only strict` additionally pass an agent-specific allowlist via `extra_args` when calling `spawn_agent` for workers (Claude Code: `["--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch"]`). The `--allowedTools` flag is Claude-CLI-specific, so gate it on the agent's `tool_type` from `list_agent_tools`: apply the allowlist only when `tool_type == "claude"`. For any other `tool_type` (`gemini`, `codex`, `copilot`, `generic`, …) under `strict`, **don't refuse it and don't ask the user** — automatically **downgrade that one agent to best-effort** (the in-prompt READ-ONLY block, which binds every backend), note the per-agent downgrade, and keep going. This preserves the full multi-model panel — the whole point of counselors — while `claude`-type agents still get the hard allowlist. So `strict` means "hard sandbox where supported, in-prompt enforcement everywhere else," and a preset defaulting to `strict` (e.g. `bughunt`, `security`) never collapses a mixed panel to Claude-only.
 
 Note: the **coordinator** is NOT read-only — it needs to call MCP tools to orchestrate, and it uses Read/Grep/Glob for the discovery phase (both modes). Only workers are restricted. (In run mode the coordinator is *this skill session*, which already has full access; in loop mode it's the spawned coordinator agent.)
 
