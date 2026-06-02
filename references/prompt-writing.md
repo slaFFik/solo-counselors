@@ -4,7 +4,7 @@ Before fanning out, the coordinator (the skill itself in run mode, the detached 
 
 ## 1. Repo discovery
 
-Explore the scoped project with read-only tools (Read, Grep, Glob) to gather the context the panel needs. Budget this tightly — aim to spend at most about a third of the time left until the deadline (half at the very most). The panel still needs time to run, and the collector only waits until that same deadline, so overspending here starves the workers.
+Explore the scoped project with read-only tools (Read, Grep, Glob) to gather the context the panel needs. Budget this tightly — aim to spend at most about a third of the run's `duration_ms` budget (half at the very most). The panel still needs time to run within that same budget, so overspending here starves the workers.
 - Locate the area named or implied by the user's task (paths, symbols, recent changes).
 - Note the stack, key files, and entry points relevant to the task.
 - If a preset is supplied, follow its **Discovery focus** section.

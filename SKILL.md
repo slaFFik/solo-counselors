@@ -38,7 +38,7 @@ Parse the user's invocation. Positional argument is the prompt (or use `-f/--fil
 | `--context <paths>` | Files to attach to the prompt (comma-sep) | — |
 | `--preset <name>` | One preset from `presets/` to shape discovery + prompt-writing | none |
 | `--no-inline-enhancement` | Skip discovery + prompt-writing for an inline prompt (send it raw) | off |
-| `--duration <e.g. 30m>` | Total deadline | `15m` run / `45m` loop |
+| `--duration <e.g. 30m>` | Total time budget | `15m` run / `45m` loop |
 | `--dry-run` | Print dispatch plan, no spawn | off |
 | `--status <run_id>` | Reconnect to an in-flight run | management |
 | `--cancel <run_id>` | Cancel a run | management |
@@ -128,7 +128,7 @@ If `--dry-run`: print the dispatch plan as a table (one row per worker: index, a
 **Common to both modes** first:
 1. Generate `run_id` — short uuid (8 hex chars is fine; `Bash` can produce it via `openssl rand -hex 4` or `python3 -c "import uuid; print(uuid.uuid4().hex[:8])"`).
 2. `kv_set("counselors." + run_id + ".args", JSON.stringify({mode, agents, preset, enhance, rounds, ...}))`.
-3. Compute `deadline_ts_ms = now + duration`. Compute `agents_csv` = the resolved panel joined (e.g. `claude,gemini,claude`).
+3. Compute `duration_ms` from `--duration` by arithmetic (`30m` → `1_800_000`) — a **relative** budget, not a wall-clock deadline (Solo has no clock tool; see *Timekeeping* in `orchestration-core.md`). Compute `agents_csv` = the resolved panel joined (e.g. `claude,gemini,claude`).
 
 Then branch by mode.
 
@@ -136,18 +136,15 @@ Then branch by mode.
 
 In run mode **you are the coordinator** — do the work in this session; do **not** spawn a separate coordinator agent. Read what you'll need: `Read(references/orchestration-core.md)`, `Read(references/worker-preamble.md)`, and — when `ENHANCE == on` — `Read(references/prompt-writing.md)`, `Read(references/execution-boilerplate.md)`, plus `Read(<preset_path>)` if a preset is set. Then drive the core routines yourself:
 
-1. `kv_set("counselors." + run_id + ".status", "running")`. `scratchpad_write("counselors.{run_id}.progress", "[coordinator-start mode=run inline enhance={ENHANCE} ts={now}]", tags=["counselor","{run_id}","progress"])` — **record `progress_id`**.
-2. **BUILD-EXECUTION-PROMPT** (core): `user_prompt` (resolve `-f`; fold in `--context`), `prompt_source`, `ENHANCE`, `preset_path`, the prompt-writing text, the execution-boilerplate text, `progress_id`, `deadline_ts_ms`. → `execution_prompt` + **`prompt_id`**. When `ENHANCE == on` you run repo discovery here with **Read/Grep/Glob** (you have full file access) and write the enriched prompt; budget discovery against the deadline.
+1. `kv_set("counselors." + run_id + ".status", "running")`. `scratchpad_write("counselors.{run_id}.progress", "[coordinator-start mode=run inline enhance={ENHANCE}]", tags=["counselor","{run_id}","progress"])` — **record `progress_id`**.
+2. **BUILD-EXECUTION-PROMPT** (core): `user_prompt` (resolve `-f`; fold in `--context`), `prompt_source`, `ENHANCE`, `preset_path`, the prompt-writing text, the execution-boilerplate text, `progress_id`, `duration_ms`. → `execution_prompt` + **`prompt_id`**. When `ENHANCE == on` you run repo discovery here with **Read/Grep/Glob** (you have full file access) and write the enriched prompt; cap discovery at ~⅓ of `duration_ms`.
 3. **DISPATCH-WAVE** (core): `dispatch`, `execution_prompt`, `prior_round_context_by_index = {}` (none — run is single-round), `name_suffix = ""`, `read_only_policy`, the worker-preamble text. → `workers`.
-4. **COLLECT-WAVE** (core): `workers`, `round_seg = ""`, `extra_tags = []`, `progress_id`, `deadline_ts_ms`. → outputs (in memory) + worker `scratchpad_id`s.
+4. **COLLECT-WAVE** (core): `workers`, `round_seg = ""`, `extra_tags = []`, `progress_id`, `wave_budget_ms = duration_ms` (the whole budget — run is a single wave). → outputs (in memory) + worker `scratchpad_id`s.
 5. **SYNTHESIZE** (core): outputs, `agents_csv`, `rounds = 1`, `preset_note` (` · preset {name}` or empty). → `summary_id`.
-6. **Finalize** — classify the run, then archive only on a clean `done`:
-   - **`done`** (the normal terminal state, *even if some agents failed*): you finished collecting the wave — every worker reached a terminal state, whether it produced output or crashed/timed out — **and at least one worker produced usable output**. A failed agent among others that succeeded does **not** downgrade the run; it's already reported in the synthesis Panel-health section. → **ARCHIVE-WORKING-PADS** (core) with the worker ids (including any failed worker's pad) + `progress_id` + `prompt_id`; `kv_set status "done"`. (So 1 of 3 agents failing while the other 2 succeed is still `done` — archive and clean up.)
-   - **`partial`** (the run was cut short *as a whole*): the deadline hit before you finished collecting the wave, **or** no worker produced any usable output at all. → `kv_set status "partial"`; **do not archive** — keep the per-agent pads for inspection.
-   - **`cancelled`**: user interrupts → `stop_process` any live workers, SYNTHESIZE what you have, `kv_set status "cancelled"`; **do not archive**.
+6. **Finalize** — call **CLASSIFY-AND-FINALIZE** (core): `worker_outcomes` (from COLLECT-WAVE), `cut_short_status` (`partial` if the single wave's `duration_ms` guard expired with workers still unfinished; empty if the wave collected cleanly — run mode has no separate `timeout` exit), `cancelled` (true only if the user interrupted this session mid-run — `stop_process` any live workers first, then SYNTHESIZE what you hold), the worker `scratchpad_id`s, `progress_id`, and `prompt_id`. It settles `done`/`partial`/`cancelled`, archives **only** on a clean `done` (so 1 of 3 agents failing while the other 2 succeed is still `done`), and writes the status.
 7. Present **inline** per Step 9 — you already hold the summary. **There is no poll loop; skip Step 8.**
 
-> **Run-mode idle-wait.** `COLLECT-WAVE` schedules `timer_fire_when_idle_all` from this **external** session (your live Claude Code session, not a Solo-managed agent), so PTY delivery of the `wave-complete` body is less guaranteed here than for loop's detached coordinator. The `already_satisfied` branch in `COLLECT-WAVE` already covers the common fast-worker case — when the workers finish before the timer is even scheduled, you collect immediately and no body is needed. If a timer *is* pending but no `wave-complete` arrives within a short grace (~10s), don't keep waiting: poll each worker's `get_process_status` every few seconds until all are idle, then collect. Loop mode keeps the pure idle-timer (delivery to the detached coordinator is reliable).
+> **Run-mode idle-wait.** `COLLECT-WAVE` schedules `timer_fire_when_idle_all` from this **external** session (your live Claude Code session, not a Solo-managed agent). Delivery of the `wave-complete` body to an external session is **not guaranteed** — but in practice it often *does* arrive, so let the timer be the primary wake and proceed normally when the body comes. Two fallbacks cover the gaps so you never hang: the `already_satisfied` branch handles workers that finish before the timer is even scheduled (collect immediately, no body needed); and if a timer *is* pending but no `wave-complete` arrives within a short grace, stop waiting and re-check each worker's `get_process_status`, pacing with a short `Bash("sleep …")` between checks, until all are idle, then collect. Don't *depend* on the body, but don't assume it won't come — it frequently does. Loop mode's detached coordinator gets reliable delivery.
 
 ### Step 7b — Loop mode: spawn a detached coordinator
 
@@ -160,7 +157,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
    - `{{DISPATCH_JSON}}` ← JSON of dispatch list with `agent`, `agent_tool_id`, `index`
    - `{{USER_PROMPT_OR_PATH}}` ← user's prompt text (read from `-f` file if provided; fold in `--context` file contents if given)
    - `{{READ_ONLY_POLICY}}` ← resolved read-only policy
-   - `{{DEADLINE_TS_MS}}` ← deadline_ts_ms
+   - `{{DURATION_MS}}` ← duration_ms (relative budget; the coordinator arms its own deadline timer from it)
    - `{{ORCHESTRATION_CORE_PATH}}` ← absolute path to references/orchestration-core.md
    - `{{WORKER_PREAMBLE_PATH}}` ← absolute path to references/worker-preamble.md
    - `{{PROMPT_SOURCE}}` ← `inline` | `file`
@@ -170,6 +167,7 @@ In run mode **you are the coordinator** — do the work in this session; do **no
    - `{{CONVERGENCE_THRESHOLD}}` ← threshold
    - `{{ON_TIMEOUT}}` ← policy
    - `{{ROUND_CONTEXT_TEMPLATE_PATH}}` ← absolute path to references/round-context-template.md
+   - `{{CONVERGENCE_RUBRIC_PATH}}` ← absolute path to references/convergence-rubric.md
    - `{{PROMPT_WRITING_PATH}}` ← absolute path to references/prompt-writing.md
    - `{{EXECUTION_BOILERPLATE_PATH}}` ← absolute path to references/execution-boilerplate.md
 6. `mcp__solo__send_input(process_id=coord_pid, input=<the `agent_instructions` (if any) then a blank line, followed by the substituted coordinator text>, submit=true, wait_ms=2000)`.
@@ -180,11 +178,11 @@ In run mode **you are the coordinator** — do the work in this session; do **no
 
 Run mode skips this — it already holds the result.
 
-Every ~15s (you can pace yourself), call `mcp__solo__kv_get("counselors." + run_id + ".status")`. Stop polling on `done`, `cancelled`, `error`, `timeout`, `partial`. Hard ceiling = duration + 30s grace.
+The coordinator is detached and **timer-driven** (it arms its own deadline timer and wakes itself on worker-idle), so this poll is only to stay attached and surface progress — the run does not depend on it. Timer-body delivery to an external session like yours isn't *guaranteed* (it sometimes arrives, but don't count on it to drive the poll), so pace the re-check with a short `sleep` (e.g. `Bash("sleep 15")`) between calls rather than busy-looping. Each tick: `mcp__solo__kv_get("counselors." + run_id + ".status")`. Stop on `done`, `cancelled`, `error`, `timeout`, `partial`. Hard ceiling ≈ `duration_ms` + 30s grace (count your own ticks — don't read a clock).
 
 While polling, optionally tail progress for a one-liner update if many minutes pass: `scratchpad_list(tags=[run_id])` → find `counselors.{run_id}.progress` → `scratchpad_tail(scratchpad_id, lines=5)`.
 
-If duration elapses with status still `running`, surface a warning and offer to either keep polling or run `--cancel`.
+If you reach the ceiling with status still `running`, surface a warning and offer to either keep polling or run `--cancel`. (Detaching is safe — the coordinator keeps going; reconnect later with `--status`.)
 
 ## Step 9: Present results
 

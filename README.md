@@ -86,7 +86,7 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Two execution modes** (both enrich the prompt first):
   - `run` (default) — single-shot. Enriches the prompt, then fans it out once, inline. A fast second opinion.
-  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed each agent **its own** prior findings back (never its peers' — no cross-model pollution) so each model refines instead of repeating. Runs durably via a detached coordinator; stops early on **convergence** (output shrinks below a threshold).
+  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed each agent **its own** prior findings back (never its peers' — no cross-model pollution) so each model refines instead of repeating. Runs durably via a detached coordinator; stops early on **convergence** (when a round turns up few genuinely new findings).
 
 - **Presets (both modes)** — `bughunt`, `security`, `regression`, `contracts`, `invariants`, `hotspots`. A preset (one per run, via `--preset`) shapes *what the discovery phase looks for* and *what the written prompt emphasizes* — it is a workflow, not a per-agent persona. Add your own by dropping a markdown file in `presets/` with the same front-matter shape.
 
@@ -122,7 +122,7 @@ These flags are also available in `loop` mode.
 | `--context <paths>` | Files to attach to the prompt | — |
 | `--preset <name>` | Shape discovery + prompt-writing (one preset) | none |
 | `--no-inline-enhancement` | Skip enrichment for an inline prompt (send it raw) | off |
-| `--duration <e.g. 30m>` | Total deadline | `15m` run / `45m` loop |
+| `--duration <e.g. 30m>` | Total time budget | `15m` run / `45m` loop |
 | `--dry-run` | Print plan, don't spawn | off |
 | `--status <run_id>` / `--cancel <run_id>` | Reconnect / cancel a run | — |
 | `--list-groups` / `--save-group <name>=<a,b,c>` / `--delete-group <name>` | Manage agent groups (list / save / delete) | — |
@@ -135,7 +135,7 @@ They are added on top of the `run` flags.
 | Flag | Meaning | Default |
 |---|---|---|
 | `--rounds <N>` | Max rounds before stopping | preset default or 3 |
-| `--convergence-threshold <ratio>` | Early-stop when output shrinks below this | 0.3 |
+| `--convergence-threshold <ratio>` | Early-stop when a round's *new* findings fall below this fraction of the prior round's | 0.3 |
 | `--on-timeout <abort\|continue>` | What to do if a round times out | `continue` |
 
 **Examples:**
