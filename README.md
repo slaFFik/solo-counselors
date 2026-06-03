@@ -66,16 +66,16 @@ Neither mode fans out your raw one-liner. Both first build an **enriched executi
 both modes:   your task ──► [ repo discovery ] ──► [ prompt-writing ] ──► enriched prompt
                             (guided by --preset, if one is set)
 
-loop only:    rounds 2..N re-run the panel; each agent sees only ITS OWN previous-round
-              findings (never its peers') — to refine and go deeper without repeating
-              itself. Independence is preserved; the coordinator merges across models
-              only at synthesis.
+loop only:    each agent re-runs rounds 2..N AT ITS OWN PACE; each sees only ITS OWN
+              previous-round findings (never its peers') — to refine and go deeper
+              without repeating itself. The coordinator re-dispatches a worker the
+              moment it finishes a round (no panel barrier), merging models at synthesis.
 ```
 
 So the modes differ only after the prompt exists: **`run`** fans it out once; **`loop`** iterates rounds 2..N (and runs durably via the coordinator).
 
 1. The **skill** parses your invocation, runs preflight checks, and resolves the agent panel. In **run** it then coordinates the fan-out itself; in **loop** it spawns a detached coordinator and polls for status.
-2. The **coordinator** (your session in run, a separate Solo agent in loop) builds the enriched prompt (repo-discovery → prompt-writing, both modes), fans it to one worker per agent, waits for them all to finish, scrapes each one's output, and writes a synthesis. Building the prompt and the dispatch/collect/synthesize/archive mechanics are all shared via `references/orchestration-core.md`.
+2. The **coordinator** (your session in run, a separate Solo agent in loop) builds the enriched prompt (repo-discovery → prompt-writing, both modes) — **prewarming the panel during discovery so the agents' boot overlaps it** — fans the prompt to one worker per agent, and **collects each worker the moment it goes idle** (a per-finisher drain, so a fast model is never held behind a slow one), and — when `--verify cross` is in effect — runs an adversarial cross-verification wave (each agent's findings re-checked by a different agent) before writing the synthesis. Building the prompt and the dispatch/collect/verify/synthesize/archive mechanics are all shared via `references/orchestration-core.md`.
 3. The **workers** each review the same prompt independently, in read-only mode — differing only by which model they are.
 
 You see a concise synthesis in chat plus pointers to per-worker scratchpads for drill-down.
@@ -86,7 +86,7 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Two execution modes** (both enrich the prompt first):
   - `run` (default) — single-shot. Enriches the prompt, then fans it out once, inline. A fast second opinion.
-  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed each agent **its own** prior findings back (never its peers' — no cross-model pollution) so each model refines instead of repeating. Runs durably via a detached coordinator; stops early on **convergence** (when a round turns up few genuinely new findings).
+  - `loop` — multi-round. Builds the same enriched prompt, then rounds 2+ feed each agent **its own** prior findings back (never its peers' — no cross-model pollution) so each model refines instead of repeating. **Each model advances through its rounds at its own pace** — the coordinator re-dispatches a worker the instant it finishes a round rather than waiting for the whole panel, so a fast model goes deeper while a slow one is still early. Runs durably via a detached coordinator; each worker stops early on its own **convergence** (when one of its rounds turns up few genuinely new findings).
 
 - **Presets (both modes)** — `bughunt`, `security`, `regression`, `contracts`, `invariants`, `hotspots`. A preset (one per run, via `--preset`) shapes *what the discovery phase looks for* and *what the written prompt emphasizes* — it is a workflow, not a per-agent persona. Add your own by dropping a markdown file in `presets/` with the same front-matter shape.
 
@@ -96,11 +96,13 @@ You see a concise synthesis in chat plus pointers to per-worker scratchpads for 
 
 - **Durable & resumable (loop)** — loop state lives in `counselors.<run_id>.*` KV keys and scratchpads, driven by a detached coordinator; reconnect with `--status <run_id>`, stop with `--cancel <run_id>`. A `run` coordinates inline, so it lives and dies with your session — short by design.
 
-- **Read-only enforcement** — `strict` / `best-effort` / `off`. Workers are sandboxed; under `strict`, Claude-family agents get a hard tool allowlist (`--allowedTools`) and any other backend automatically falls back to in-prompt enforcement for that one agent (no prompt, panel kept whole) — so `strict` (including a preset that defaults to it) never silently drops non-Claude members. The coordinator stays writable so it can orchestrate (and read the repo during loop discovery).
+- **Read-only enforcement** — `strict` / `best-effort` / `off`. Workers are sandboxed; under `strict`, Claude-family agents get a hard tool allowlist (`--allowedTools`) and any other backend automatically falls back to in-prompt enforcement for that one agent (no prompt, panel kept whole) — so `strict` (including a preset that defaults to it) never silently drops non-Claude members. The coordinator stays writable so it can orchestrate (and read the repo during loop discovery). Verifiers (below) are sandboxed the same way.
+
+- **Adversarial cross-verification (`--verify cross`)** — optionally, after the panel reports, each agent's findings are re-checked by a *different* agent (read-only, deterministic cyclic assignment, model-diverse where possible) that opens the cited code and rules every finding **confirmed / refuted / uncertain**. The synthesis then prioritizes confirmed findings and moves refuted ones into a **"Disputed / likely false-positive"** section instead of shipping them. This turns the panel's model diversity into a checks-and-balances step against self-preferential bias and confident-but-wrong findings — agreement across models isn't the same as an independent model actually standing behind a finding. It runs once (end-of-run, after the final loop round), needs ≥2 finding-producing agents, and is set per preset: **on for `security`/`bughunt`**, off elsewhere; override with `--verify off|cross`.
 
 - **One master report** — beyond the original, the coordinator writes a deduped combined summary (with per-model attribution) to `counselors.<run_id>.summary`. On a clean run the per-agent scratchpads are then **archived** (and the run's transient KV state is **deleted**), so a finished run leaves a single visible pad as its only artifact — but archived ≠ deleted, so you can still browse an individual agent's review in Solo if you want to drill in.
 
-- **Guardrails** — preflight verifies Solo is reachable, a project is scoped, KV is enabled, and an agent exists. `--dry-run` prints the dispatch plan without spawning; `--duration` bounds total runtime. The whole panel spawns at once.
+- **Guardrails** — preflight verifies Solo is reachable, a project is scoped, KV is enabled, and an agent exists. `--dry-run` prints the dispatch plan without spawning; `--duration` bounds total runtime (a single clock-free deadline timer). The whole panel is prewarmed at once — spawned before discovery so each agent's boot overlaps it.
 
 ## Usage
 
@@ -119,6 +121,7 @@ These flags are also available in `loop` mode.
 | `--agents <a,b,c>` (`-a`) | Agent panel — one worker each, dups allowed | first available |
 | `--group <name>` | Use a saved agent group | last-used |
 | `--read-only <strict\|best-effort\|off>` | Worker mutation policy | preset default or `best-effort` |
+| `--verify <off\|cross>` | Adversarial cross-check of findings before synthesis (one agent re-checks another's) | preset `verify` or `off` |
 | `--context <paths>` | Files to attach to the prompt | — |
 | `--preset <name>` | Shape discovery + prompt-writing (one preset) | none |
 | `--no-inline-enhancement` | Skip enrichment for an inline prompt (send it raw) | off |
@@ -146,6 +149,8 @@ They are added on top of the `run` flags.
 /solo-counselors "is this diff safe to merge?" --agents claude,claude --no-inline-enhancement
 /solo-counselors "audit the checkout flow" --mode loop --preset security --rounds 4
 /solo-counselors "deep review of the payments module" --mode loop --agents claude,gemini
+/solo-counselors "review the auth module" --agents claude,gemini,codex --verify cross
+/solo-counselors "quick bug scan, skip the cross-check" --preset bughunt --verify off
 ```
 
 ## Requirements

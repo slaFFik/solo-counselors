@@ -2,6 +2,7 @@
 name: hotspots
 defaultRounds: 4
 defaultReadOnly: strict
+verify: off
 ---
 
 # Preset: hotspots

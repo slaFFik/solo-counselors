@@ -24,10 +24,23 @@ When you have completed your analysis, emit your final answer wrapped in fence m
 
 ```
 ===COUNSELOR-OUTPUT-BEGIN===
-(your full analysis here — markdown ok)
+
+## Findings
+
+Write each finding under its own `### F<n> — <short title>` header with stable ids F1, F2, F3, … and the fields named in the task above (severity, confidence, location, evidence, impact, fix). Prose/markdown is fine — this is the part a human reads.
+
+## Findings index
+
+End with a compact, machine-readable digest — one line per finding, pipe-delimited, ids matching your headers above and in the same order:
+
+F1 | <severity> | <confidence> | <file path>:<symbol> | <one-line claim>
+F2 | <severity> | <confidence> | <file path>:<symbol> | <one-line claim>
+
+If you found nothing, write a single line `(none)` here and say so briefly in the prose.
+
 ===COUNSELOR-OUTPUT-END===
 ```
 
-Do not emit the fence markers anywhere else in your output (no rehearsal, no examples). Emit them exactly once, surrounding your final analysis.
+Emit the fence markers exactly once, surrounding your whole answer — both the prose and the index — and never elsewhere (no rehearsal, no examples). The `## Findings index` is **mandatory** and must be the last thing before the closing fence: the coordinator parses it to deduplicate across the panel, track new findings across rounds, and route each finding to an independent verifier. Keep the ids stable and the `file:symbol` locations precise.
 
 After emitting the closing fence, you are done. Do not continue with further commentary.

@@ -2,6 +2,7 @@
 name: contracts
 defaultRounds: 3
 defaultReadOnly: strict
+verify: off
 ---
 
 # Preset: contracts

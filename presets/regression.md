@@ -2,6 +2,7 @@
 name: regression
 defaultRounds: 3
 defaultReadOnly: strict
+verify: off
 ---
 
 # Preset: regression

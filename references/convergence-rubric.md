@@ -1,37 +1,39 @@
 # Convergence rubric (loop mode)
 
-The coordinator checks convergence after each round (from round 2 onward) to decide whether to keep iterating or stop early.
+In the pipelined loop, convergence is decided **per worker**, the moment that worker finishes a round (from its **round 2** onward), to decide whether to re-dispatch it for another round or stop it. There is **no panel-wide round barrier** — a fast model may converge and stop after 2 rounds while a slow one is still on round 1. Each worker's decision uses **only its own** findings across its own rounds (no cross-model pollution), so it is a clean per-worker signal.
 
-## Primary metric: new-findings ratio
+## Primary metric: per-worker new-findings ratio
 
 Word count is a poor signal here: the round-context template deliberately tells each agent to be terse and *not* restate prior findings, so a later round is naturally far shorter than round 1 even when it surfaced valuable new material. Counting **what's actually new** measures the marginal value of another round directly.
 
-You already parse each worker's findings for synthesis, so reuse that parse:
+Each worker ends its output with a machine-readable `## Findings index` (one line per finding: `F<n> | severity | confidence | file:symbol | claim`). Use it to make this count mechanical rather than a prose judgment call.
 
-For each agent's round-N output, count its **new** findings — those it did not already raise in any of its own prior rounds. Treat two findings as the same when they point at the same location (file + symbol/area) and the same underlying issue, even if worded differently; ignore pure restatements.
+For the worker that just finished its round `r`, count its **new** findings — those it did not already raise in any of **its own** prior rounds (`r-1`, `r-2`, …). Match on the index's `file:symbol` location plus the underlying issue: treat two findings as the same when they point at the same location and the same issue even if worded differently; ignore pure restatements.
 
 ```
-new_count   = Σ over agents of (distinct new findings that agent raised this round)
-prior_count = distinct findings the panel produced in round N-1
+new_count   = that worker's distinct new findings in round r
+prior_count = that worker's distinct findings in round r-1
 ratio       = new_count / max(1, prior_count)
 ```
 
-If `ratio < convergence_threshold` (default 0.3) → **converged**, stop the loop.
+If `ratio < convergence_threshold` (default 0.3) → **that worker has converged**: stop it (`done_reason = "converged"`) and do not re-dispatch it. Other workers are unaffected and keep going at their own pace.
+
+Convergence counts **raw** findings — verification is a single end-of-run wave (see VERIFY-WAVE) that runs after the last worker stops, so no verdicts exist yet while a worker is deciding whether to do another round. That's intentional: convergence measures whether *that worker* is still surfacing new material; verification later decides which of the whole panel's findings survive.
 
 ## Rationale
 
-When the panel is still finding real problems, each round adds a meaningful number of genuinely new findings. When it has mined the area out, agents either repeat themselves (those don't count as new) or explicitly report "no further findings." A sharp drop in *new* findings — independent of how much prose each agent wrote — is the honest signal that another round's marginal value is low.
+When a worker is still finding real problems, each of its rounds adds a meaningful number of genuinely new findings. When it has mined its area out, it either repeats itself (those don't count as new) or explicitly reports "no further findings." A sharp drop in *that worker's* new findings — independent of how much prose it wrote — is the honest signal that another round from it has low marginal value. Deciding per worker means a productive model isn't stopped just because a peer went quiet, and a mined-out model isn't dragged through more rounds just because a peer is still productive.
 
 ## Edge cases
 
-- If an agent crashed or produced nothing this round, it contributes 0 new findings; exclude it from `prior_count` only if it was also empty last round. If *no* agent produced any findings this round → converged (nothing left to find).
-- If a single agent goes quiet but others keep surfacing new findings, the panel-wide `new_count` governs — do not converge.
+- A worker that crashed or produced nothing this round contributes 0 new findings → it converges immediately (the coordinator records `done_reason = "empty"`); never re-dispatch a crashed worker.
 - Restatements with a sharper fix or stronger evidence are a judgment call: count one as "new" only if the added evidence/impact/fix is itself a substantive finding, not just nicer wording.
-- If `new_count` holds steady or grows round over round, the panel is still productive — keep iterating.
+- If a worker's `new_count` holds steady or grows round over round, it is still productive — keep re-dispatching it (up to its `rounds` cap).
+- The `rounds` value is the hard per-worker ceiling: a worker that never converges still stops after `rounds` rounds (`done_reason = "maxrounds"`).
 
 ## Tuning
 
-- More aggressive (stop earlier): raise threshold toward 0.5.
-- More conservative (keep iterating): lower threshold toward 0.1.
+- More aggressive (stop each worker earlier): raise threshold toward 0.5.
+- More conservative (let workers keep iterating): lower threshold toward 0.1.
 
-The default 0.3 says "stop when this round's new findings are fewer than 30% of last round's finding count" — i.e. the panel is mostly repeating itself.
+The default 0.3 says "stop a worker when its round's new findings are fewer than 30% of its previous round's finding count" — i.e. that model is mostly repeating itself.

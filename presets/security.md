@@ -2,6 +2,7 @@
 name: security
 defaultRounds: 3
 defaultReadOnly: strict
+verify: cross
 ---
 
 # Preset: security

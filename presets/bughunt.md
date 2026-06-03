@@ -2,6 +2,7 @@
 name: bughunt
 defaultRounds: 3
 defaultReadOnly: strict
+verify: cross
 ---
 
 # Preset: bughunt
