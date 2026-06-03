@@ -18,7 +18,9 @@ Each finding must **prove itself against the actual code** — do not take the c
 - **refuted** — the code does not support the claim: e.g. the input is already sanitized/validated, the branch is unreachable, a guard upstream prevents it, the cited location doesn't match the code, or the claim misreads what the code does. Say precisely what makes it wrong.
 - **uncertain** — you cannot determine it from a static read (needs runtime context, depends on caller behavior you can't see, or the evidence is too thin to confirm or refute). Use this honestly rather than forcing a verdict.
 
-You may also propose a **severity adjustment** when the finding is real but over- or under-rated (e.g. a "critical" that is gated behind an admin-only flag is really medium).
+When a finding states a **reachability** path — entry point → trigger → the guard that supposedly fails to stop it — treat that path as the claim to break, not a map to follow. Hunt for the check, validation, precondition, or unreachability the worker missed: if you find one, the finding is **refuted**; only **confirm** after you have independently traced the path yourself and it survives. A plausible-looking path handed to you is not evidence that the path is real.
+
+You may also propose a **severity adjustment** when the finding is real but over- or under-rated. Calibrate against the same anchors the panel used — critical: data loss/corruption, security breach, or failure on a common path; high: wrong behavior on a common path or an exploit needing a precondition; medium: limited blast radius or edge-case-only; low: minor with small impact — e.g. a "critical" gated behind an admin-only flag is really medium.
 
 Cover **every** finding id in the list below — do not skip any. Be terse; cite the concrete code (`file:line`) that drove each ruling.
 
