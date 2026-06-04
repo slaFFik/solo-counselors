@@ -55,6 +55,39 @@ workers — skipping" and skip the wave (also a valid result to eyeball).
 /solo-counselors "anything" --group smoke --mode loop --rounds 3 --dry-run
 ```
 
+## Preset resolution (dry-run, instant)
+
+A preset is data the skill reads at run time, so a dry-run confirms one is wired in without
+spawning anything — the front-matter defaults flow through into the printed plan. Swap
+`architecture` for whichever preset you're checking:
+
+```
+/solo-counselors "anything" --group smoke --preset architecture --dry-run
+```
+
+Eyeball the plan: `preset = architecture`, `ENHANCE = on` (a preset always enriches — dry-run
+stops *before* discovery actually runs, so this stays instant and folder-agnostic), and
+`--read-only = strict` + `--verify = cross` **resolved from the preset's front-matter** with
+no explicit flags passed. Because `verify` is `cross` on the 2-agent `smoke` group, the plan
+also prints the planned **verifier → target** assignment; on a single-agent panel it should
+instead show verification downgraded to `off` ("needs ≥2 workers"). Nothing spawns.
+
+## Real enriched run (manual — reads files, not fast)
+
+The dry-run checks *wiring*; to exercise the actual discovery + architecture lens, point a
+real run at a friction-rich repo (not folder-agnostic, takes minutes). Scope the prompt to a
+subsystem for the sharpest result:
+
+```
+/solo-counselors "find deepening opportunities in <a module you know>" --preset architecture --agents claude,gemini --mode run
+```
+
+A healthy result names concrete deepening candidates in the architecture vocabulary
+(module / seam / depth), ranks them by recommendation strength with an execution sequence,
+classifies each candidate's dependencies, and keeps any incidental correctness bugs in a
+separate lane. With `--verify cross` (the preset default) each finding is re-checked by a
+different model before synthesis.
+
 ## What a healthy run looks like (eyeball this)
 
 - Finishes promptly with no hang, and prints a synthesis plus a `run_id`.
