@@ -16,6 +16,7 @@ When exploring the repo, hunt for architectural friction (go deep on the area th
 - Concept fragmentation — understanding one idea forces bouncing across many tiny modules
 - Behaviour split away from the place that owns its invariant or ordering — e.g. logic pulled into pure helpers for testability while the rule it enforces lives elsewhere, so no single module owns it (good pure functions are fine; the smell is the ownerless invariant)
 - Tightly-coupled modules that leak across their seams — one module reaching into another's internals
+- Cyclic or inverted dependency flow — modules, packages, or layers that depend on each other bidirectionally, or lower-level code importing higher-level policy; flag only when the cycle causes present locality pain — init/order coupling, a change that can't be made on one side alone, or a deletion test that fails across both sides of the cycle
 - Areas that are untested, or hard to test through their current interface
 - Single-adapter indirection masquerading as a seam (a port with only one implementation)
 
