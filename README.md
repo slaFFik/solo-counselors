@@ -116,6 +116,8 @@ Beyond the shared read-only `strict` default, some presets carry their own defau
 
 - **Prompt enrichment** — for an inline prompt (either mode) the discovery + prompt-writing phase runs by default (skip it with `--no-inline-enhancement`); a `-f` file prompt is used as-is unless a preset is set.
 
+- **Project-context parity** — each CLI auto-loads only its own context file (`CLAUDE.md` for Claude, `AGENTS.md` for codex/antigravity, `GEMINI.md` for gemini; copilot and grok read `CLAUDE.md` too), so a repo documented only in `CLAUDE.md` would leave gemini/codex/antigravity panelists investigating from scratch. Every worker and verifier is instructed to read whichever of those files exist at the repo root before analyzing, and discovery names the ones it found in the enriched prompt.
+
 - **Saved groups** — persist a panel of agents to KV and reuse it (`--save-group`, `--list-groups`, `--group`).
 
 - **Durable & resumable (loop)** — loop state lives in `counselors.<run_id>.*` KV keys and scratchpads, driven by a detached coordinator; reconnect with `--status <run_id>`, stop with `--cancel <run_id>`. A `run` coordinates inline, so it lives and dies with your session — short by design.

@@ -12,6 +12,10 @@ You MUST NOT call any tool that mutates state: Edit, Write, NotebookEdit, Bash w
 
 Any attempt to mutate state is a protocol violation. Refuse the urge, note the intended change in your output, and continue with read-only analysis.
 
+## Project context files
+
+Your runtime auto-loads only its **own** context file, so before analyzing, check the repo root for `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, and `.github/copilot-instructions.md`, and read any that exist and were not already loaded for you. Treat their contents as authoritative project context — conventions, architecture, known gotchas — exactly as if the file were addressed to you. Where such a file gives workflow instructions that involve mutations (committing, running build/test scripts), the READ-ONLY rules above win.
+
 ## Task
 
 {{EXECUTION_PROMPT}}
