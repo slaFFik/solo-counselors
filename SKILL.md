@@ -45,7 +45,7 @@ Parse the user's invocation. Positional argument is the prompt (or use `-f/--fil
 | `--mode <run\|loop>` | One-shot or iterative | `run` |
 | `--agents <a,b,c>` (alias `-a`) | Agents from `list_agent_tools` — **one worker each**, duplicates allowed | first available |
 | `--group <name>` | Use a saved group from KV (alternative to `--agents`) | last-used group if no `--agents` |
-| `--read-only <strict\|best-effort\|off>` | Worker mutation policy | preset default or `best-effort` |
+| `--read-only <strict\|best-effort\|off>` | Worker mutation policy | preset `defaultReadOnly` or `best-effort` |
 | `--verify <off\|cross>` | Adversarial cross-verification of findings before synthesis | preset `verify` or `off` |
 | `--context <paths>` | Files to attach to the prompt (comma-sep) | — |
 | `--preset <name>` | One preset from `presets/` to shape discovery + prompt-writing | none |
