@@ -49,6 +49,22 @@ workers — skipping" and skip the wave (also a valid result to eyeball).
 /solo-counselors "SMOKE TEST — do not read or analyze any files; emit one fabricated low-severity finding titled 'smoke-test-ok' then stop." --group smoke --mode loop --rounds 2 --no-inline-enhancement --read-only off --duration 8m
 ```
 
+## Loop mode + verification reserve (the wave that used to get dropped)
+
+```
+/solo-counselors "SMOKE TEST — do not read or analyze any files; emit one fabricated low-severity finding titled 'smoke-test-ok' then stop." --group smoke --mode loop --rounds 2 --no-inline-enhancement --read-only off --duration 12m --verify cross
+```
+
+Loop mode with verification on is the path where a long collection used to swallow the verify
+wave whole. At 12m the reserve is 3m, so the coordinator arms two timers: collection cutoff at
+9m, run deadline at 12m. What to eyeball in the progress pad and the summary:
+
+- `counselors.<run_id>.verify.*` pads exist, and the summary carries confirmed/refuted labels.
+  Verification must happen whether the run finished cleanly or spent its whole collection budget.
+- If a worker was still going at the 9m cutoff, its progress line reads `last call` and the run
+  still classifies as `done` — it stopped between rounds with a complete round in hand.
+- Only a worker truncated *mid-round* should push the run to `timeout` / `partial`.
+
 ## Plan only (instant, spawns nothing)
 
 ```

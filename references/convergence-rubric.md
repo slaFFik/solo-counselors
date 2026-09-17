@@ -30,6 +30,7 @@ When a worker is still finding real problems, each of its rounds adds a meaningf
 - Restatements with a sharper fix or stronger evidence are a judgment call: count one as "new" only if the added evidence/impact/fix is itself a substantive finding, not just nicer wording.
 - If a worker's `new_count` holds steady or grows round over round, it is still productive — keep re-dispatching it (up to its `rounds` cap).
 - The `rounds` value is the hard per-worker ceiling: a worker that never converges still stops after `rounds` rounds (`done_reason = "maxrounds"`).
+- Convergence is not the only reason a worker stops early. When the collection cutoff fires, the coordinator stops advancing workers (`done_reason = "lastcall"`) so the reserved verification slice survives — a budget decision, not a signal about that worker's productivity, and it says nothing about whether it had converged.
 
 ## Tuning
 
