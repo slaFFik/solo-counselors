@@ -50,7 +50,7 @@ Parse the user's invocation. Positional argument is the prompt (or use `-f/--fil
 | `--context <paths>` | Files to attach to the prompt (comma-sep) | — |
 | `--preset <name>` | One preset from `presets/` to shape discovery + prompt-writing | none |
 | `--no-inline-enhancement` | Skip discovery + prompt-writing for an inline prompt (send it raw) | off |
-| `--duration <e.g. 30m>` | Total time budget | `15m` run / `45m` loop |
+| `--duration <e.g. 30m>` | Total time budget | `30m` run / `90m` loop |
 | `--dry-run` | Print dispatch plan, no spawn | off |
 | `--status <run_id>` | Reconnect to an in-flight run | management |
 | `--cancel <run_id>` | Cancel a run | management |

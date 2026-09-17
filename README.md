@@ -58,7 +58,7 @@ These flags are also available in `loop` mode.
 | `--context <paths>` | Files to attach to the prompt | — |
 | `--preset <name>` | Shape discovery + prompt-writing (one preset) | none |
 | `--no-inline-enhancement` | Skip enrichment for an inline prompt (send it raw); a `--preset` still enriches | off |
-| `--duration <e.g. 30m>` | Total time budget | `15m` run / `45m` loop |
+| `--duration <e.g. 30m>` | Total time budget | `30m` run / `90m` loop |
 | `--dry-run` | Print plan, don't spawn | off |
 | `--status <run_id>` / `--cancel <run_id>` | Reconnect / cancel a run | — |
 | `--list-groups` / `--save-group <name>=<a,b,c>` / `--delete-group <name>` | Manage agent groups (list / save / delete) | — |
