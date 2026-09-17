@@ -4,7 +4,7 @@ Before fanning out, the coordinator (the skill itself in run mode, the detached 
 
 ## 1. Repo discovery
 
-Explore the scoped project with read-only tools (Read, Grep, Glob) to gather the context the panel needs. Budget this tightly — aim to spend at most about a third of the run's `duration_ms` budget (half at the very most). The panel still needs time to run within that same budget, so overspending here starves the workers.
+Explore the scoped project with read-only tools (Read, Grep, Glob) to gather the context the panel needs. Budget this tightly: spend at most min(⅓ × `duration_ms`, 10 min). Discovery cost tracks the size of the repo, not the size of the budget, so a longer run does not mean a longer discovery. The panel still needs time to run within that same budget, so overspending here starves the workers.
 - Check the repo root for agent-context files — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md` — and read any found: they often answer the other discovery questions (stack, entry points, conventions) outright.
 - Locate the area named or implied by the user's task (paths, symbols, recent changes).
 - Note the stack, key files, and entry points relevant to the task.
